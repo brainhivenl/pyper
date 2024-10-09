@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use http_body_util::Full;
+use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use httparse::Status;
 use hyper::{
     body::Bytes,
@@ -8,8 +8,14 @@ use hyper::{
     Response, StatusCode,
 };
 
-pub fn translate(input: fastcgi_client::Response) -> Response<Full<Bytes>> {
-    let mut response = Response::new(Full::new(Bytes::default()));
+fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
+    Full::new(chunk.into())
+        .map_err(|never| match never {})
+        .boxed()
+}
+
+pub fn translate(input: fastcgi_client::Response) -> Response<BoxBody<Bytes, hyper::Error>> {
+    let mut response = Response::new(BoxBody::default());
     let stdout = input.stdout.unwrap_or_default();
 
     let mut headers = [httparse::EMPTY_HEADER; 64];
@@ -32,7 +38,7 @@ pub fn translate(input: fastcgi_client::Response) -> Response<Full<Bytes>> {
             );
         }
 
-        *response.body_mut() = Full::new(Bytes::from(stdout[offset..].to_vec()));
+        *response.body_mut() = full(Bytes::from(stdout[offset..].to_vec()));
     }
 
     response
