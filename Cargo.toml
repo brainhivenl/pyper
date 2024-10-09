@@ -1,0 +1,17 @@
+[package]
+name = "phpyper"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.83"
+bb8 = "0.8.5"
+fastcgi-client = "0.9.0"
+http-body-util = "0.1.2"
+httparse = "1.9.5"
+hyper = { version = "1.4.1", features = ["http1", "http2", "server"] }
+hyper-util = { version = "0.1.9", features = ["tokio", "http2"] }
+thiserror = "1.0.64"
+tokio = { version = "1.40.0", features = ["full"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
