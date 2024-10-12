@@ -1,15 +1,26 @@
 use std::{convert::Infallible, path::PathBuf};
 
 use bb8::Pool;
+use futures::TryStreamExt;
 use http::StatusCode;
-use http_body_util::{combinators::BoxBody, BodyExt, Full};
-use hyper::{body::Bytes, Request, Response};
+use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
+use hyper::{
+    body::{Bytes, Frame},
+    Request, Response,
+};
+use tokio::fs::File;
+use tokio_util::io::ReaderStream;
 use tracing::instrument;
 
-use crate::manager::{self, Manager};
+use crate::{
+    manager::{self, Manager},
+    request,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
     #[error("failed to get connection: {0}")]
     Pool(#[from] bb8::RunError<manager::Error>),
     #[error("fastcgi error: {0}")]
@@ -20,6 +31,20 @@ pub enum Error {
     HeaderName(#[from] http::header::InvalidHeaderName),
     #[error("invalid header value: {0}")]
     HeaderValue(#[from] http::header::InvalidHeaderValue),
+}
+
+async fn serve_file(
+    path: PathBuf,
+) -> Result<Response<BoxBody<Bytes, Error>>, crate::client::Error> {
+    let file = File::open(path).await?;
+    let stream = ReaderStream::new(file);
+    let stream_body = StreamBody::new(stream.map_ok(Frame::data).map_err(|e| e.into()));
+    let body = stream_body.boxed();
+
+    let mut response = Response::new(body);
+    *response.status_mut() = StatusCode::OK;
+
+    Ok(response)
 }
 
 #[derive(Clone)]
@@ -37,11 +62,20 @@ impl PhpClient {
     pub async fn handle(
         &self,
         request: Request<hyper::body::Incoming>,
-    ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, Infallible> {
+    ) -> Result<Response<BoxBody<Bytes, Error>>, Infallible> {
         let result = async move {
-            let mut conn = self.pool.get().await?;
             let (parts, body) = request.into_parts();
-            let request = crate::request::translate(&self.root, &parts, body).await;
+            let file = request::find_file(&self.root, parts.uri.path());
+
+            if file.extension() != Some("php".as_ref()) {
+                return serve_file(file).await;
+            }
+
+            let mut conn = self.pool.get().await?;
+
+            tracing::debug!({ ?file, path = parts.uri.path() }, "found script for request");
+
+            let request = request::translate(&self.root, &file, &parts, body).await;
             let response = conn.send(request).await?;
 
             crate::response::translate(response)

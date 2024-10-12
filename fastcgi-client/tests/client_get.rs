@@ -49,10 +49,10 @@ async fn test_client<S: AsyncRead + AsyncWrite + Unpin>(client: Client<S, ShortC
         .remote_addr("127.0.0.1")
         .remote_port(12345)
         .server_addr("127.0.0.1")
-        .server_port(80)
+        .server_port("80")
         .server_name("jmjoy-pc")
         .content_type("")
-        .content_length(0);
+        .content_length("0");
 
     let output = client
         .execute_once(Request::new(params, &mut io::empty()))
@@ -94,10 +94,10 @@ async fn test_client_stream<S: AsyncRead + AsyncWrite + Unpin>(client: Client<S,
         .remote_addr("127.0.0.1")
         .remote_port(12345)
         .server_addr("127.0.0.1")
-        .server_port(80)
+        .server_port("80")
         .server_name("jmjoy-pc")
         .content_type("")
-        .content_length(0);
+        .content_length("0");
 
     let mut stream = client
         .execute_once_stream(Request::new(params, &mut io::empty()))
@@ -153,10 +153,10 @@ async fn test_client_big_response_stream<S: AsyncRead + AsyncWrite + Unpin>(
         .remote_addr("127.0.0.1")
         .remote_port(12345)
         .server_addr("127.0.0.1")
-        .server_port(80)
+        .server_port("80")
         .server_name("jmjoy-pc")
         .content_type("")
-        .content_length(0);
+        .content_length("0");
 
     let mut stream = client
         .execute_once_stream(Request::new(params, &mut io::empty()))

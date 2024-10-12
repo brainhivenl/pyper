@@ -54,10 +54,10 @@ async fn single() {
         .remote_addr("127.0.0.1")
         .remote_port(12345)
         .server_addr("127.0.0.1")
-        .server_port(80)
+        .server_port("80")
         .server_name("jmjoy-pc")
         .content_type("application/x-www-form-urlencoded")
-        .content_length(body.len());
+        .content_length(body.len().to_string());
 
     for _ in 0..3 {
         let output = client
@@ -113,10 +113,10 @@ async fn single_stream() {
         .remote_addr("127.0.0.1")
         .remote_port(12345)
         .server_addr("127.0.0.1")
-        .server_port(80)
+        .server_port("80")
         .server_name("jmjoy-pc")
         .content_type("application/x-www-form-urlencoded")
-        .content_length(body.len());
+        .content_length(body.len().to_string());
 
     for _ in 0..3 {
         let mut stream = client

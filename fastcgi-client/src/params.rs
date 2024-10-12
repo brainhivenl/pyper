@@ -102,8 +102,8 @@ impl<'a> Params<'a> {
     }
 
     #[inline]
-    pub fn server_port(mut self, server_port: u16) -> Self {
-        self.insert("SERVER_PORT".into(), server_port.to_string().into());
+    pub fn server_port<S: Into<Cow<'a, str>>>(mut self, server_port: S) -> Self {
+        self.insert("SERVER_PORT".into(), server_port.into());
         self
     }
 
@@ -120,8 +120,14 @@ impl<'a> Params<'a> {
     }
 
     #[inline]
-    pub fn content_length(mut self, content_length: usize) -> Self {
-        self.insert("CONTENT_LENGTH".into(), content_length.to_string().into());
+    pub fn content_length<S: Into<Cow<'a, str>>>(mut self, content_length: S) -> Self {
+        self.insert("CONTENT_LENGTH".into(), content_length.into());
+        self
+    }
+
+    #[inline]
+    pub fn custom<S: Into<Cow<'a, str>>>(mut self, name: S, value: S) -> Self {
+        self.insert(name.into(), value.into());
         self
     }
 }

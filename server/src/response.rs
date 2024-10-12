@@ -8,7 +8,9 @@ use hyper::{
     Response, StatusCode,
 };
 
-fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
+use crate::client;
+
+fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, client::Error> {
     Full::new(chunk.into())
         .map_err(|never| match never {})
         .boxed()
@@ -37,7 +39,7 @@ pub fn parse_headers<const N: usize>(
 
 pub fn translate(
     input: fastcgi_client::Response,
-) -> Result<Response<BoxBody<Bytes, hyper::Error>>, crate::client::Error> {
+) -> Result<Response<BoxBody<Bytes, client::Error>>, crate::client::Error> {
     let mut response = Response::new(BoxBody::default());
     let mut stdout = input.stdout.unwrap_or_default();
     let (offset, headers) = parse_headers::<64>(&stdout)?;

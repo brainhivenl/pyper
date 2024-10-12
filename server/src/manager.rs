@@ -97,7 +97,7 @@ fn ping_params(path: &str) -> Params {
     Params::default()
         .request_method("GET")
         .server_name("localhost")
-        .server_port(8000)
+        .server_port("8000")
         .script_name(path)
         .script_filename(path)
 }

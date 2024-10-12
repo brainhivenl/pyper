@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 
 use fastcgi_client::Params;
 use futures::TryStreamExt;
@@ -12,32 +15,63 @@ fn try_get_header<'a>(parts: &'a Parts, name: &str) -> Option<&'a str> {
     parts.headers.get(name).and_then(|v| v.to_str().ok())
 }
 
-fn join(root: impl AsRef<Path>, path: &str) -> String {
-    root.as_ref()
-        .join(path)
-        .into_os_string()
-        .into_string()
-        .unwrap_or_default()
+trait AsStr {
+    fn as_str(&self) -> &str;
 }
 
-fn path_to_str(path: &Path) -> &str {
-    path.as_os_str().to_str().unwrap_or_default()
+impl AsStr for OsStr {
+    fn as_str(&self) -> &str {
+        self.to_str().unwrap_or_default()
+    }
+}
+
+impl AsStr for Path {
+    fn as_str(&self) -> &str {
+        self.as_os_str().as_str()
+    }
+}
+
+pub fn find_file(root: &Path, uri_path: &str) -> PathBuf {
+    let path = root.join(uri_path.trim_start_matches('/'));
+
+    if path.is_file() && path.exists() {
+        return path;
+    }
+
+    if path.is_dir() {
+        let path = path.join("index.php");
+
+        if path.exists() {
+            return path;
+        }
+    }
+
+    root.join("index.php")
 }
 
 pub async fn translate<'a>(
     root: &'a Path,
+    script: &'a Path,
     parts: &'a Parts,
     body: Incoming,
 ) -> fastcgi_client::Request<'a, impl AsyncRead + Unpin> {
-    let file_name = "index.php";
     let mut params = Params::default()
-        .document_root(path_to_str(root))
+        .document_root(root.as_str())
         .request_method(parts.method.as_str())
-        .script_name(file_name)
-        .script_filename(join(root, &file_name));
+        .script_name(script.file_name().unwrap_or_default().as_str())
+        .script_filename(script.as_str());
 
     if let Some(header) = try_get_header(&parts, "host") {
-        params = params.server_name(header);
+        let (host, port) = header.split_once(':').unwrap_or((header, ""));
+
+        params = params
+            .server_name(host)
+            .server_addr(header)
+            .custom("HTTP_HOST", header);
+
+        if !port.is_empty() {
+            params = params.server_port(port);
+        }
     }
 
     if let Some(header) = try_get_header(&parts, "content-type") {
@@ -45,7 +79,7 @@ pub async fn translate<'a>(
     }
 
     if let Some(header) = try_get_header(&parts, "content-length") {
-        params.insert("CONTENT_LENGTH".into(), header.into());
+        params = params.content_length(header);
     }
 
     if let Some(path_query) = parts.uri.path_and_query() {

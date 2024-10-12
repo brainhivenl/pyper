@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let io = TokioIo::new(tcp);
         let client = client.clone();
 
-        tracing::debug!("incoming connection");
+        tracing::trace!("incoming connection");
 
         tokio::task::spawn(async move {
             if let Err(e) = Builder::new()
@@ -66,10 +66,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .serve_connection(io, service_fn(|r| client.handle(r)))
                 .await
             {
-                tracing::error!({ error = ?e }, "failed to serve connection");
+                tracing::warn!({ error = ?e }, "failed to serve connection");
             }
 
-            tracing::debug!("finished connection");
+            tracing::trace!("finished connection");
         });
     }
 }

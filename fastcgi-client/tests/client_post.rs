@@ -47,10 +47,10 @@ async fn post_big_body() {
         .remote_addr("127.0.0.1")
         .remote_port(12345)
         .server_addr("127.0.0.1")
-        .server_port(80)
+        .server_port("80")
         .server_name("jmjoy-pc")
         .content_type("text/plain")
-        .content_length(body.len());
+        .content_length(body.len().to_string());
 
     let output = timeout(
         Duration::from_secs(3),
