@@ -6,7 +6,7 @@ use std::{
 use client::PhpClient;
 use hyper::{server::conn::http1::Builder, service::service_fn};
 use hyper_util::rt::{TokioIo, TokioTimer};
-use manager::ConnManager;
+use manager::Manager;
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
@@ -22,8 +22,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     let addr = SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 9000));
-    let manager = ConnManager::new(addr);
-    let pool = bb8::Builder::new().max_size(10).build(manager).await?;
+    let manager = Manager::new(addr);
+    let pool = bb8::Builder::new().max_size(5).build(manager).await?;
 
     let client = PhpClient::new("./example".into(), pool);
 
