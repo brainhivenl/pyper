@@ -92,6 +92,16 @@ pub async fn translate<'a>(
         }
     }
 
+    for (name, value) in parts.headers.iter() {
+        if matches!(name.as_str(), "host" | "content-type" | "content-length") {
+            continue;
+        }
+
+        if let Some(value) = value.to_str().ok() {
+            params = params.custom(format!("HTTP_{}", name.as_str().to_uppercase()), value);
+        }
+    }
+
     let stream = body.into_data_stream();
     let read = TryStreamExt::map_err(stream, std::io::Error::other).into_async_read();
 

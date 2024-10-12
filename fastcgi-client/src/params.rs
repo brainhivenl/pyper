@@ -126,7 +126,9 @@ impl<'a> Params<'a> {
     }
 
     #[inline]
-    pub fn custom<S: Into<Cow<'a, str>>>(mut self, name: S, value: S) -> Self {
+    pub fn custom<N: Into<Cow<'a, str>>, V: Into<Cow<'a, str>>>(
+        mut self, name: N, value: V,
+    ) -> Self {
         self.insert(name.into(), value.into());
         self
     }
