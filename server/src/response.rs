@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
-use httparse::Status;
+use httparse::{Header, Status};
 use hyper::{
     body::Bytes,
     header::{HeaderName, HeaderValue},
@@ -14,32 +14,55 @@ fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
         .boxed()
 }
 
-pub fn translate(input: fastcgi_client::Response) -> Response<BoxBody<Bytes, hyper::Error>> {
-    let mut response = Response::new(BoxBody::default());
-    let stdout = input.stdout.unwrap_or_default();
-
-    let mut headers = [httparse::EMPTY_HEADER; 64];
-    let status = httparse::parse_headers(&stdout, &mut headers).expect("failed to parse headers");
-
-    if let Status::Complete((offset, headers)) = status {
-        for header in headers {
-            if header.name == "Status" {
-                if let Some(status) = header.value.iter().position(|c| *c == b' ') {
-                    let status = StatusCode::from_bytes(&header.value[..status]).unwrap();
-                    *response.status_mut() = status;
-                }
-
-                continue;
-            }
-
-            response.headers_mut().insert(
-                HeaderName::from_str(&header.name).unwrap(),
-                HeaderValue::from_bytes(header.value).unwrap(),
-            );
+pub fn parse_status(header: &Header<'_>) -> Option<StatusCode> {
+    if let Some(status) = header.value.iter().position(|c| *c == b' ') {
+        if let Ok(status) = StatusCode::from_bytes(&header.value[..status]) {
+            return Some(status);
         }
-
-        *response.body_mut() = full(Bytes::from(stdout[offset..].to_vec()));
     }
 
-    response
+    None
+}
+
+pub fn parse_headers<const N: usize>(
+    input: &[u8],
+) -> Result<(usize, [Header<'_>; N]), httparse::Error> {
+    let mut headers = [httparse::EMPTY_HEADER; N];
+
+    match httparse::parse_headers(input, &mut headers)? {
+        Status::Complete((offset, _)) => Ok((offset, headers)),
+        Status::Partial => Ok((0, headers)),
+    }
+}
+
+pub fn translate(
+    input: fastcgi_client::Response,
+) -> Result<Response<BoxBody<Bytes, hyper::Error>>, crate::client::Error> {
+    let mut response = Response::new(BoxBody::default());
+    let mut stdout = input.stdout.unwrap_or_default();
+    let (offset, headers) = parse_headers::<64>(&stdout)?;
+
+    for header in headers {
+        match header.name {
+            // Invalid header
+            "" => continue,
+            "Status" => {
+                if let Some(status) = parse_status(&header) {
+                    *response.status_mut() = status;
+                }
+            }
+            _ => {
+                response.headers_mut().insert(
+                    HeaderName::from_str(&header.name)?,
+                    HeaderValue::from_bytes(header.value)?,
+                );
+            }
+        }
+    }
+
+    if offset > 0 {
+        *response.body_mut() = full(stdout.drain(offset..).collect::<Bytes>());
+    }
+
+    Ok(response)
 }

@@ -1,8 +1,6 @@
-use std::{
-    error::Error,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-};
+use std::{error::Error, net::SocketAddr, path::PathBuf};
 
+use clap::Parser;
 use client::PhpClient;
 use hyper::{server::conn::http1::Builder, service::service_fn};
 use hyper_util::rt::{TokioIo, TokioTimer};
@@ -15,20 +13,45 @@ mod manager;
 mod request;
 mod response;
 
+#[derive(Parser)]
+struct Opts {
+    #[clap(long, default_value = "127.0.0.1:9000")]
+    bind: SocketAddr,
+
+    #[clap(long)]
+    ping_path: Option<String>,
+
+    #[clap(long, default_value = "127.0.0.1:3000")]
+    listen: SocketAddr,
+
+    #[clap(long, default_value = "./example")]
+    root_dir: PathBuf,
+
+    #[clap(long, default_value = "5")]
+    max_conn: u32,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let opts = Opts::parse();
+
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    let addr = SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 9000));
-    let manager = Manager::new(addr);
-    let pool = bb8::Builder::new().max_size(5).build(manager).await?;
+    let mut manager = Manager::new(opts.bind);
 
-    let client = PhpClient::new("./example".into(), pool);
+    if let Some(path) = opts.ping_path {
+        manager = manager.with_ping(path);
+    }
 
-    let addr: SocketAddr = ([127, 0, 0, 1], 3000).into();
-    let listener = TcpListener::bind(addr).await?;
+    let pool = bb8::Builder::new()
+        .max_size(opts.max_conn)
+        .build(manager)
+        .await?;
+
+    let client = PhpClient::new(pool, opts.root_dir);
+    let listener = TcpListener::bind(opts.listen).await?;
 
     loop {
         let (tcp, _) = listener.accept().await?;

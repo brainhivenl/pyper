@@ -10,10 +10,16 @@ use crate::manager::{self, Manager};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("connection error: {0}")]
+    #[error("failed to get connection: {0}")]
     Pool(#[from] bb8::RunError<manager::Error>),
     #[error("fastcgi error: {0}")]
     FastCgi(#[from] fastcgi_client::ClientError),
+    #[error("failed to parse headers: {0}")]
+    Headers(#[from] httparse::Error),
+    #[error("invalid header name: {0}")]
+    HeaderName(#[from] http::header::InvalidHeaderName),
+    #[error("invalid header value: {0}")]
+    HeaderValue(#[from] http::header::InvalidHeaderValue),
 }
 
 #[derive(Clone)]
@@ -23,8 +29,8 @@ pub struct PhpClient {
 }
 
 impl PhpClient {
-    pub fn new(root: PathBuf, pool: Pool<Manager>) -> Self {
-        Self { root, pool }
+    pub fn new(pool: Pool<Manager>, root: PathBuf) -> Self {
+        Self { pool, root }
     }
 
     #[instrument(skip(self, request), name = "handle_request")]
@@ -38,7 +44,7 @@ impl PhpClient {
             let request = crate::request::translate(&self.root, &parts, body).await;
             let response = conn.send(request).await?;
 
-            Ok::<_, Error>(crate::response::translate(response))
+            crate::response::translate(response)
         };
 
         match result.await {
