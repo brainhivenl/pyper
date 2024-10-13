@@ -1,16 +1,14 @@
 use std::{convert::Infallible, future::Future, path::PathBuf, pin::Pin};
 
 use bb8::Pool;
-use futures::TryStreamExt;
 use http::StatusCode;
-use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
+use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::{
-    body::{Bytes, Frame, Incoming},
+    body::{Bytes, Incoming},
     service::Service,
     Request, Response,
 };
-use tokio::fs::File;
-use tokio_util::io::ReaderStream;
+use hyper_staticfile::Static;
 
 use crate::{
     manager::{self, Manager},
@@ -33,20 +31,6 @@ pub enum Error {
     HeaderName(#[from] http::header::InvalidHeaderName),
     #[error("failed to parse header value: {0}")]
     HeaderValue(#[from] http::header::InvalidHeaderValue),
-}
-
-async fn serve_file(
-    path: PathBuf,
-) -> Result<Response<BoxBody<Bytes, Error>>, crate::service::Error> {
-    let file = File::open(path).await?;
-    let stream = ReaderStream::new(file);
-    let stream_body = StreamBody::new(stream.map_ok(Frame::data).map_err(|e| e.into()));
-    let body = stream_body.boxed();
-
-    let mut response = Response::new(body);
-    *response.status_mut() = StatusCode::OK;
-
-    Ok(response)
 }
 
 fn handle_result(
@@ -72,12 +56,17 @@ fn handle_result(
 #[derive(Clone)]
 pub struct PhpService {
     root: PathBuf,
+    files: Static,
     pool: Pool<Manager>,
 }
 
 impl PhpService {
     pub fn new(pool: Pool<Manager>, root: PathBuf) -> Self {
-        Self { pool, root }
+        Self {
+            pool,
+            files: Static::new(&root),
+            root,
+        }
     }
 }
 
@@ -89,16 +78,18 @@ impl Service<Request<Incoming>> for PhpService {
     fn call(&self, request: Request<Incoming>) -> Self::Future {
         let root = self.root.clone();
         let pool = self.pool.clone();
+        let files = self.files.clone();
         let future = async move {
-            let (parts, body) = request.into_parts();
-            let file = request::find_file(&root, parts.uri.path());
+            let file = request::find_file(&root, request.uri().path());
 
             if file.extension() != Some("php".as_ref()) {
-                return serve_file(file).await;
+                let response = files.serve(request).await?;
+                return Ok(response.map(|body| body.map_err(Into::into).boxed()));
             }
 
             // Make sure the connection is not dropped when the future is dropped
             let handle = tokio::spawn(async move {
+                let (parts, body) = request.into_parts();
                 let mut conn = pool.get().await?;
 
                 tracing::debug!({ ?file, path = parts.uri.path() }, "calling script for request");

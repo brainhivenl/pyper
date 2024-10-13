@@ -20,3 +20,4 @@ tokio-util = { version = "0.7.12", features = ["compat"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 clap = { version = "4.5.20", features = ["derive"] }
+hyper-staticfile = "0.10.1"
