@@ -24,7 +24,7 @@ struct Opts {
     #[clap(long, default_value = "127.0.0.1:3000")]
     listen: SocketAddr,
 
-    #[clap(long, default_value = "./example")]
+    #[clap(long, default_value = "./")]
     root_dir: PathBuf,
 
     #[clap(long, default_value = "5")]

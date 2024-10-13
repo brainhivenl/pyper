@@ -11,9 +11,8 @@ use bb8::ManageConnection;
 use fastcgi_client::{
     conn::KeepAlive, Client, ClientError, ClientResult, Params, Request, Response,
 };
+use httparse::Status;
 use tokio::{io::AsyncRead, net::TcpStream};
-
-use crate::response::parse_headers;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -23,6 +22,8 @@ pub enum Error {
     Client(#[from] fastcgi_client::ClientError),
     #[error("failed to parse ping response: {0}")]
     Headers(#[from] httparse::Error),
+    #[error("failed to parse ping response: incomplete headers")]
+    PingIncomplete,
     #[error("ping failed")]
     Ping,
     #[error("connection closed")]
@@ -117,11 +118,16 @@ impl ManageConnection for Manager {
             let request = Request::new(ping_params(&path), &mut empty);
             let response = conn.send(request).await?;
             let stdout = response.stdout.unwrap_or_default();
-            let (offset, _) = parse_headers::<64>(&stdout)?;
+            let mut headers = [httparse::EMPTY_HEADER; 64];
 
-            if &stdout[offset..] != b"pong" {
-                tracing::error!("ping failed");
-                return Err(Error::Ping);
+            match httparse::parse_headers(&stdout, &mut headers)? {
+                Status::Complete((offset, _)) => {
+                    if &stdout[offset..] != b"pong" {
+                        tracing::error!("ping failed");
+                        return Err(Error::Ping);
+                    }
+                }
+                _ => return Err(Error::PingIncomplete),
             }
         }
 
