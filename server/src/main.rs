@@ -47,7 +47,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let pool = bb8::Builder::new()
         .max_size(opts.max_conn)
-        .test_on_check_out(false)
         .build(manager)
         .await?;
 
