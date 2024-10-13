@@ -1,14 +1,14 @@
 use std::{error::Error, net::SocketAddr, path::PathBuf};
 
 use clap::Parser;
-use client::PhpClient;
-use hyper::{server::conn::http1::Builder, service::service_fn};
+use service::PhpService;
+use hyper::server::conn::http1::Builder;
 use hyper_util::rt::{TokioIo, TokioTimer};
 use manager::Manager;
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
-mod client;
+mod service;
 mod manager;
 mod request;
 mod response;
@@ -47,10 +47,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let pool = bb8::Builder::new()
         .max_size(opts.max_conn)
+        .test_on_check_out(false)
         .build(manager)
         .await?;
 
-    let client = PhpClient::new(pool, opts.root_dir);
+    let client = PhpService::new(pool, opts.root_dir);
     let listener = TcpListener::bind(opts.listen).await?;
 
     loop {
@@ -63,7 +64,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tokio::task::spawn(async move {
             if let Err(e) = Builder::new()
                 .timer(TokioTimer::new())
-                .serve_connection(io, service_fn(|r| client.handle(r)))
+                .half_close(true)
+                .serve_connection(io, client)
                 .await
             {
                 tracing::warn!({ error = ?e }, "failed to serve connection");

@@ -51,11 +51,7 @@ impl Manager {
     async fn _connect(&self) -> Result<Conn, Error> {
         let stream = TcpStream::connect(&self.addr).await?;
         let client = Client::new_keep_alive(stream);
-
-        Ok(Conn::new(
-            client,
-            self.ping_path.as_ref().map(|path| Arc::clone(&path)),
-        ))
+        Ok(Conn::new(client, self.ping_path.as_ref().map(Arc::clone)))
     }
 }
 

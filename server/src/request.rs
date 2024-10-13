@@ -61,7 +61,7 @@ pub async fn translate<'a>(
         .script_name(script.file_name().unwrap_or_default().as_str())
         .script_filename(script.as_str());
 
-    if let Some(header) = try_get_header(&parts, "host") {
+    if let Some(header) = try_get_header(parts, "host") {
         let (host, port) = header.split_once(':').unwrap_or((header, ""));
 
         params = params
@@ -74,11 +74,11 @@ pub async fn translate<'a>(
         }
     }
 
-    if let Some(header) = try_get_header(&parts, "content-type") {
+    if let Some(header) = try_get_header(parts, "content-type") {
         params = params.content_type(header);
     }
 
-    if let Some(header) = try_get_header(&parts, "content-length") {
+    if let Some(header) = try_get_header(parts, "content-length") {
         params = params.content_length(header);
     }
 
@@ -97,7 +97,7 @@ pub async fn translate<'a>(
             continue;
         }
 
-        if let Some(value) = value.to_str().ok() {
+        if let Ok(value) = value.to_str() {
             params = params.custom(format!("HTTP_{}", name.as_str().to_uppercase()), value);
         }
     }
